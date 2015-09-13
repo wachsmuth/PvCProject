@@ -22,7 +22,6 @@ import com.google.android.gms.maps.model.MarkerOptions;
 
 public class MapsActivity extends FragmentActivity implements GoogleApiClient.ConnectionCallbacks,
         GoogleApiClient.OnConnectionFailedListener, LocationListener {
-// test3
 
     public static final String TAG = MapsActivity.class.getSimpleName();
     private final static int CONNECTION_FAILURE_RESOLUTION_REQUEST = 9000;
@@ -100,7 +99,7 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
      * This should only be called once and when we are sure that {@link #mMap} is not null.
      */
     private void setUpMap() {
-        //mMap.animateCamera(CameraUpdateFactory.zoomTo(19));
+
         //mMap.addMarker(new MarkerOptions().position(new LatLng(0, 0)).title(message));
     }
 
@@ -127,6 +126,7 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
                 .title(message);
         mMap.addMarker(options);
         mMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
+        mMap.animateCamera(CameraUpdateFactory.zoomTo(15));
     }
 
     @Override
@@ -151,6 +151,7 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
     @Override
     public void onLocationChanged(Location location) {
         handleNewLocation(location);
+
     }
 
     @Override
