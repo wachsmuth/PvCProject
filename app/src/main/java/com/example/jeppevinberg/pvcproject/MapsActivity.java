@@ -30,7 +30,9 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
     private GoogleApiClient mGoogleApiClient;
     private LocationRequest mLocationRequest;
     private String message;
-
+    /* This method is called once the activity is created for the first time.
+        It handles setting up the map, registering the user as an GoogleApiClient and setting the location request rate.
+    */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -49,7 +51,7 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
                 .setInterval(10 * 1000)        // 10 seconds, in milliseconds
                 .setFastestInterval(1 * 1000); // 1 second, in milliseconds
     }
-
+    // This method is called when the activity resumes after the device goes into hibernation.
     @Override
     protected void onResume() {
         super.onResume();
@@ -103,6 +105,7 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
         //mMap.addMarker(new MarkerOptions().position(new LatLng(0, 0)).title(message));
     }
 
+    //This method is called once there has been a succesful connection the google API services
     @Override
     public void onConnected(Bundle bundle) {
         Log.i(TAG, "Location Services Connected.");
@@ -147,7 +150,7 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
             Log.i(TAG, "Location services connection failed with code " + connectionResult.getErrorCode());
         }
     }
-
+    //This method is called when the API reports of a change in location
     @Override
     public void onLocationChanged(Location location) {
         handleNewLocation(location);
