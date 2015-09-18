@@ -3,15 +3,19 @@ package com.example.jeppevinberg.pvcproject;
 import android.content.Intent;
 import android.content.IntentSender;
 import android.location.Location;
-import android.location.LocationListener;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.TextView;
 
+import com.firebase.client.DataSnapshot;
+import com.firebase.client.Firebase;
+import com.firebase.client.FirebaseError;
+import com.firebase.client.ValueEventListener;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
@@ -19,6 +23,9 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class MapsActivity extends FragmentActivity implements GoogleApiClient.ConnectionCallbacks,
         GoogleApiClient.OnConnectionFailedListener, LocationListener {
@@ -29,7 +36,14 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
     private GoogleMap mMap; // Might be null if Google Play services APK is not available.
     private GoogleApiClient mGoogleApiClient;
     private LocationRequest mLocationRequest;
-    private String message;
+    private MarkerOptions marker;
+    private String userName, userPass;
+    private String dBID;
+    private Firebase mainFirebase;
+    private Firebase locationFirebase;
+    private Firebase clientFirebase;
+
+
     /* This method is called once the activity is created for the first time.
         It handles setting up the map, registering the user as an GoogleApiClient and setting the location request rate.
     */
@@ -37,8 +51,13 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
+        mainFirebase = new Firebase("https://glowing-heat-5041.firebaseio.com/");
+        locationFirebase = mainFirebase.child("locations");
+        clientFirebase = locationFirebase.push();
+        dBID = clientFirebase.getKey();
         Intent intent = getIntent();
-        message = intent.getStringExtra(MainActivity.EXTRA_MESSAGE);
+        userName = intent.getStringExtra(MainActivity.EXTRA_NAME);
+        userPass = intent.getStringExtra(MainActivity.EXTRA_PASS);
         setUpMapIfNeeded();
 
         mGoogleApiClient = new GoogleApiClient.Builder(this)
@@ -63,9 +82,10 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
     protected void onPause() {
         super.onPause();
         if (mGoogleApiClient.isConnected()) {
-            LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, (com.google.android.gms.location.LocationListener) this);
+            LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
             mGoogleApiClient.disconnect();
         }
+        locationFirebase.child(dBID).removeValue();
     }
 
     /**
@@ -100,36 +120,97 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
      * This is where we can add markers or lines, add listeners or move the camera.
      * This should only be called once and when we are sure that {@link #mMap} is not null.
      */
-    private void setUpMap() {
-
-        //mMap.addMarker(new MarkerOptions().position(new LatLng(0, 0)).title(message));
-    }
+    private void setUpMap() {}
 
     //This method is called once there has been a succesful connection the google API services
     @Override
     public void onConnected(Bundle bundle) {
         Log.i(TAG, "Location Services Connected.");
+        LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
         Location location = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
         if(location == null){
-            LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, (com.google.android.gms.location.LocationListener) this);
-        }else{
+            LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
+        } else{
             handleNewLocation(location);
+            locationFirebase.child(dBID).setValue(locationToMap(location.getLatitude(), location.getLongitude()));
         }
+
     }
 
     public void handleNewLocation(Location location){
-        Log.i(TAG, location.toString());
-
+        //Log.i(TAG, location.toString());
         double currentLatitude = location.getLatitude();
         double currentLongitude = location.getLongitude();
         LatLng latLng = new LatLng(currentLatitude, currentLongitude);
+        locationFirebase.child(dBID).updateChildren(locationToMap(currentLatitude, currentLongitude));
 
-        MarkerOptions options = new MarkerOptions()
+        if(marker == null){
+            setupFirstMarker(latLng);
+        }else{
+            mMap.clear();
+            updateOwnMarker(latLng);
+            updateOtherMarkers();
+        }
+
+
+    }
+
+    public Map<String,Object> locationToMap(double lat, double lng){
+        Map<String,Object> loc = new HashMap<String,Object>();
+        loc.put("name", userName);
+        loc.put("lat", "" + lat);
+        loc.put("lng", "" + lng);
+        return loc;
+    }
+
+    public void setupFirstMarker(LatLng latLng){
+        marker = new MarkerOptions()
                 .position(latLng)
-                .title(message);
-        mMap.addMarker(options);
+                .title(userName);
+        mMap.addMarker(marker);
         mMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
-        mMap.animateCamera(CameraUpdateFactory.zoomTo(15));
+        mMap.animateCamera(CameraUpdateFactory.zoomTo(18));
+    }
+
+    public void updateOwnMarker(LatLng latLng){
+        marker = new MarkerOptions()
+                .position(latLng)
+                .title(userName);
+        mMap.addMarker(marker);
+        mMap.animateCamera(CameraUpdateFactory.zoomTo(mMap.getCameraPosition().zoom));
+    }
+
+    public void updateOtherMarkers(){
+
+        locationFirebase.addValueEventListener(new ValueEventListener() {
+            MarkerOptions mark;
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                for (DataSnapshot ss : dataSnapshot.getChildren()) {
+                        if(ss.getValue().getClass().equals(HashMap.class)){
+                            if(!(ss.getKey().equals(dBID))){
+                                HashMap<String, Object> m = (HashMap<String,Object>)ss.getValue();
+                                String name = (String) m.get("name");
+                                double lat = Double.parseDouble((String) m.get("lat"));
+                                double lng = Double.parseDouble((String) m.get("lng"));
+                                mark = new MarkerOptions().position(new LatLng(lat, lng)).title(name);
+                                mMap.addMarker(mark);
+                            }
+
+
+                        }
+
+
+
+
+                }
+            }
+
+            @Override
+            public void onCancelled(FirebaseError firebaseError) {
+
+            }
+        });
     }
 
     @Override
@@ -158,17 +239,11 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
     }
 
     @Override
-    public void onStatusChanged(String provider, int status, Bundle extras) {
+    public void onDestroy(){
+        super.onDestroy();
+        locationFirebase.child(dBID).removeValue();
 
     }
 
-    @Override
-    public void onProviderEnabled(String provider) {
 
-    }
-
-    @Override
-    public void onProviderDisabled(String provider) {
-
-    }
 }
