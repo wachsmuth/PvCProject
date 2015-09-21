@@ -40,7 +40,7 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
     private String userName, userPass;
     private String dBID;
     private Firebase mainFirebase;
-    private Firebase locationFirebase;
+    private Firebase usersFirebase;
     private Firebase clientFirebase;
 
 
@@ -51,13 +51,16 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
-        mainFirebase = new Firebase("https://glowing-heat-5041.firebaseio.com/");
-        locationFirebase = mainFirebase.child("locations");
-        clientFirebase = locationFirebase.push();
-        dBID = clientFirebase.getKey();
+
         Intent intent = getIntent();
         userName = intent.getStringExtra(MainActivity.EXTRA_NAME);
         userPass = intent.getStringExtra(MainActivity.EXTRA_PASS);
+        dBID = intent.getStringExtra(MainActivity.EXTRA_DBID);
+
+        mainFirebase = new Firebase("https://glowing-heat-5041.firebaseio.com/");
+        usersFirebase = mainFirebase.child("users");
+        clientFirebase = usersFirebase.child(dBID);
+
         setUpMapIfNeeded();
 
         mGoogleApiClient = new GoogleApiClient.Builder(this)
@@ -85,7 +88,6 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
             LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
             mGoogleApiClient.disconnect();
         }
-        locationFirebase.child(dBID).removeValue();
     }
 
     /**
@@ -132,7 +134,6 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
             LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
         } else{
             handleNewLocation(location);
-            locationFirebase.child(dBID).setValue(locationToMap(location.getLatitude(), location.getLongitude()));
         }
 
     }
@@ -142,7 +143,7 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
         double currentLatitude = location.getLatitude();
         double currentLongitude = location.getLongitude();
         LatLng latLng = new LatLng(currentLatitude, currentLongitude);
-        locationFirebase.child(dBID).updateChildren(locationToMap(currentLatitude, currentLongitude));
+        clientFirebase.updateChildren(locationToMap(currentLatitude, currentLongitude));
 
         if(marker == null){
             setupFirstMarker(latLng);
@@ -158,6 +159,7 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
     public Map<String,Object> locationToMap(double lat, double lng){
         Map<String,Object> loc = new HashMap<String,Object>();
         loc.put("name", userName);
+        loc.put("password", userPass);
         loc.put("lat", "" + lat);
         loc.put("lng", "" + lng);
         return loc;
@@ -182,34 +184,30 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
 
     public void updateOtherMarkers(){
 
-        locationFirebase.addValueEventListener(new ValueEventListener() {
+        usersFirebase.addValueEventListener(new ValueEventListener() {
             MarkerOptions mark;
             @Override
-            public void onDataChange(DataSnapshot dataSnapshot) {
-                for (DataSnapshot ss : dataSnapshot.getChildren()) {
-                        if(ss.getValue().getClass().equals(HashMap.class)){
-                            if(!(ss.getKey().equals(dBID))){
-                                HashMap<String, Object> m = (HashMap<String,Object>)ss.getValue();
-                                String name = (String) m.get("name");
-                                double lat = Double.parseDouble((String) m.get("lat"));
-                                double lng = Double.parseDouble((String) m.get("lng"));
-                                mark = new MarkerOptions().position(new LatLng(lat, lng)).title(name);
-                                mMap.addMarker(mark);
-                            }
-
-
+            public void onDataChange(DataSnapshot snapshot) {
+                for (DataSnapshot postSnapshot : snapshot.getChildren()) {
+                    if(!(postSnapshot.getKey().equals(dBID))){
+                        User user = postSnapshot.getValue(User.class);
+                        String name = (String) user.getName();
+                        String latString = user.getLat();
+                        String lngString = user.getLng();
+                        if(latString != null && lngString != null){
+                            double lat = Double.parseDouble(latString);
+                            double lng = Double.parseDouble(lngString);
+                            mark = new MarkerOptions().position(new LatLng(lat, lng)).title(name);
+                            mMap.addMarker(mark);
                         }
-
-
-
-
+                    }
                 }
+                usersFirebase.removeEventListener(this);
+
             }
 
             @Override
-            public void onCancelled(FirebaseError firebaseError) {
-
-            }
+            public void onCancelled(FirebaseError firebaseError) {}
         });
     }
 
@@ -241,7 +239,6 @@ public class MapsActivity extends FragmentActivity implements GoogleApiClient.Co
     @Override
     public void onDestroy(){
         super.onDestroy();
-        locationFirebase.child(dBID).removeValue();
 
     }
 

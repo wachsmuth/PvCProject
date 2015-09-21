@@ -19,8 +19,15 @@
 
     <Button android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/button_send"
+        android:text="@string/button_login"
         android:layout_gravity="right"
-        android:onClick="sendMessage"></Button>
+        android:onClick="login"></Button>
+    <Button android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/button_register"
+        android:layout_gravity="right"
+        android:onClick="register"></Button>
+
+
 
 </LinearLayout>

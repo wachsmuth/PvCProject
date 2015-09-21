@@ -21,9 +21,17 @@ public class MainActivity extends AppCompatActivity {
 
     public final static String EXTRA_NAME = "com.example.jeppevinberg.pvcproject.NAME";
     public final static String EXTRA_PASS = "com.example.jeppevinberg.pvcproject.PASS";
+    public final static String EXTRA_DBID = "com.example.jeppevinberg.pvcproject.DBID";
     private Firebase mainFirebase;
+    private Firebase usersFirebase;
     private HashMap<String,Long> map;
+    private HashMap<String,HashMap<String,String>> testMap;
     private boolean authenticated = false;
+    private boolean userExists = false;
+    private String name;
+    private String password;
+    private String dBID;
+    private Intent intent;
 
 
     @Override
@@ -32,6 +40,8 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         Firebase.setAndroidContext(this);
         mainFirebase = new Firebase("https://glowing-heat-5041.firebaseio.com/");
+        usersFirebase = new Firebase("https://glowing-heat-5041.firebaseio.com/users");
+        intent = new Intent(this, MapsActivity.class);
 
 
     }
@@ -59,48 +69,85 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /** Called when the user clicks the Send button */
-    public void sendMessage(View view) {
-        Intent intent = new Intent(this, MapsActivity.class);
+    public void login(View view) {
         EditText nameText = (EditText) findViewById(R.id.name);
-        String name = nameText.getText().toString();
+        name = nameText.getText().toString().toLowerCase();
         EditText passText = (EditText) findViewById(R.id.pass);
-        String pass = passText.getText().toString();
+        password = passText.getText().toString().toLowerCase();
 
-        mainFirebase.child("pass").addValueEventListener(new ValueEventListener() {
-            private Intent innerIntent;
-            private String innerName;
-            private String innerPass;
+        usersFirebase.addValueEventListener(new ValueEventListener() {
 
             @Override
             public void onDataChange(DataSnapshot snapshot) {
-                map = (HashMap<String, Long>) snapshot.getValue();
-                if(map != null){
-                    innerName = innerName.toLowerCase();
-                    innerPass = innerPass.toLowerCase();
-
-                    if(innerPass.equals(""+map.get(innerName))) {
-                        Log.d("PvCProject", "Succesfully Authenticated");
-                        innerIntent.putExtra(EXTRA_NAME, innerName);
-                        innerIntent.putExtra(EXTRA_PASS, innerPass);
-                        startActivity(innerIntent);
-                    }else{
-                        Log.d("PvCProject", "Authentication Failed");
+                authenticated = false;
+                for (DataSnapshot postSnapshot : snapshot.getChildren()) {
+                    User user = postSnapshot.getValue(User.class);
+                    if (user.getPassword().equals(password) && user.getName().equals(name)) {
+                        authenticated = true;
+                        dBID = postSnapshot.getKey();
+                        break;
                     }
                 }
 
+
+                //remove eventlistener to ignore redundant callbacks
+                usersFirebase.removeEventListener(this);
+                if(authenticated){
+                    Log.i("PvCProject", "Authentication Successful");
+                    intent.putExtra(EXTRA_NAME, name);
+                    intent.putExtra(EXTRA_PASS, password);
+                    intent.putExtra(EXTRA_DBID, dBID);
+                    startActivity(intent);
+
+                }else{
+                   Log.i("PvCProject", "Authentication Failed");
+                }
             }
 
             @Override
-            public void onCancelled(FirebaseError error) {}
-
-            public ValueEventListener init(Intent intent, String name, String pass){
-                innerIntent = intent;
-                innerName = name;
-                innerPass = pass;
-                return this;
+            public void onCancelled(FirebaseError error) {
             }
 
-        }.init(intent, name, pass));
+        });
 
     }
+
+    public void register(View view) {
+        EditText nameText = (EditText) findViewById(R.id.name);
+        name = nameText.getText().toString().toLowerCase();
+        EditText passText = (EditText) findViewById(R.id.pass);
+        password = passText.getText().toString().toLowerCase();
+
+        usersFirebase.addValueEventListener(new ValueEventListener() {
+
+            @Override
+            public void onDataChange(DataSnapshot snapshot) {
+                userExists = false;
+                for (DataSnapshot postSnapshot: snapshot.getChildren()) {
+                    User user = postSnapshot.getValue(User.class);
+                    if(user.getName().equals(name)){
+                        userExists = true;
+                        break;
+                    }
+                }
+                //remove eventlistener to ignore redundant callbacks
+                usersFirebase.removeEventListener(this);
+                if(userExists){
+                    Log.i("PvCProject", "User Exists");
+                }else{
+                    User user = new User(name, password, null, null);
+                    usersFirebase.push().setValue(user);
+                    Log.i("PvCProject", "User Created");
+                }
+            }
+
+            @Override
+            public void onCancelled(FirebaseError firebaseError) {}
+
+        });
+
+
+
+    }
+
 }
